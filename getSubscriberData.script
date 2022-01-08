@@ -1,0 +1,45 @@
+#!/bin/zsh
+#requires Reporter.jar to connect to appstore connect https://help.apple.com/itc/contentreporterguide/en.lproj/static.html
+#VENDORID needs to be filled in with the vendor id of the organization for which you want to access data (this can be found using instructions from above url)
+
+TYPE=Subscriber
+NUMBEROFTIMEPERIODS=365
+TODAY=$(date "+%Y-%m-%d")
+DATETYPE=Daily
+FOLDERNAME=data/$(echo $TYPE)Data$(echo $NUMBEROFTIMEPERIODS)$(echo $DATETYPE)$(echo $TODAY)
+SUBTYPE=Detailed
+VENDORID=XXXXXXXX
+
+#for now all of the useful reports have Daily as datetype in the "Reporter" function. This might change, so just leaving this note
+REPORTERDATETYPE=Daily
+
+#if DATETYPE is Monthly and the TYPE is Subscriber then we want to do a daily pull for the number of time periods but only use the last day of every month or something like date -v1d -v-Xm -v-1d. Here "-v1d" sets to the first day of the month "-v-1d" sets one day back (last day of previous month) and "-v-Xm" goes back X months from current month. 
+
+[[ $TYPE == "SubscriptionEvent" || $TYPE == Subscription ]] && SUBTYPE=Summary
+[[ $TYPE == "Subscriber" ]] && SUBTYPE=Detailed
+
+
+for ((i=$(echo $NUMBEROFTIMEPERIODS); i>0; i--)); 
+	do 
+		#sets the date in the format that the reporter.jar function needs to get the date
+		
+		if [[ $DATETYPE = Monthly && ($TYPE = Subscriber || $TYPE == Subscription) ]]; then
+			(( month= $i - 1 ))
+			dateToGet=$(date -v1d -v-$(echo $month)m -v-1d "+%Y-%m-%d");
+			#we need the date to be daily here because it never works otherwise..
+		else
+			dateToGet=$(date -v-`echo $i`d "+%Y-%m-%d");
+	
+		fi
+		echo $dateToGet 
+		dateForReporter=$(echo ${dateToGet//-/""})
+		java -jar Reporter.jar p=Reporter.properties Sales.getReport $VENDORID, $TYPE, $SUBTYPE, $REPORTERDATETYPE, $dateForReporter, 1_2
+		#change the name of the file so that tableau's date function does better with it
+		mv $(echo $TYPE)*$(echo $dateForReporter)* "$(echo $TYPE)$(echo $dateToGet).txt.gz";
+	done;
+#unzip all of the files
+gzip -d *.gz
+#move all of the files to a new folder
+rm -r $FOLDERNAME
+mkdir $FOLDERNAME
+mv $(echo $TYPE)*20*.txt $FOLDERNAME
